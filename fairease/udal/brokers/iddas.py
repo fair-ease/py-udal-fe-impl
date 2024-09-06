@@ -2,6 +2,7 @@ import io
 from pathlib import Path
 import zipfile
 from SPARQLWrapper import SPARQLWrapper, JSON 
+import numpy as np
 import requests
 from requests.exceptions import RequestException
 import os
@@ -10,6 +11,7 @@ import time
 import json
 from typing import List, Dict, Tuple, Union
 import tempfile
+
 import swagger_client
 from swagger_client.rest import ApiException
 
@@ -276,25 +278,26 @@ class IDDASBroker(Broker):
         sparql.setQuery(query)
         sparql.setReturnFormat(JSON)
         results = sparql.query().convert()
-
+            
         def do_processing(dataset: xr.Dataset):
-            dataset.close()
-            if 'parameter' in params:
-                filters = []
-                exclude_params = []
+            try: 
+                list_data_vars = ['JULD', 'LATITUDE', 'LONGITUDE']
+            
+                parameter = params['parameter']
+                if isinstance(parameter, str):
+                    list_data_vars.append(self.dict_params[parameter])
+                elif isinstance(parameter, list):
+                    for param in parameter:
+                        list_data_vars.append(self.dict_params[param])
 
-                for var in dataset:
-                    if not any(param in var for param in self.dict_params.values()):
-                        filters.append(var)
-                    else:
-                        exclude_params.append(var)
-                for key in self.dict_params.keys():
-                    if key == params['parameter']:
-                        filters.extend([var for var in exclude_params if self.dict_params[key] in var])
-                filtered_dataset = dataset[filters]
+                dataset = dataset[list_data_vars]
 
-                return filtered_dataset
-            return dataset
+                dataset.close()
+                return dataset
+            except KeyError:
+                return None
+            except Exception as e:
+                raise Exception(f'Error: {e}')
 
         if self._config.cache_dir is None:
             with tempfile.TemporaryDirectory(prefix='fairease-udal-') as temp_dir:
@@ -328,7 +331,16 @@ class IDDASBroker(Broker):
                         with open(dir.joinpath(file_name_temp), 'wb') as f:
                             f.write(file_content)
 
-                return do_processing(xr.open_mfdataset(f"{dir}/*.nc", combine='nested', concat_dim='N_LEVELS', parallel=True))
+
+                ds = []
+                for file in dir.iterdir():
+                    ds.append(do_processing(xr.open_dataset(file)))
+                    
+                ds = [x for x in ds if x is not None]
+
+                return ds
+
+
         else:
             dir = Path(self._config.cache_dir).joinpath(folder_name_filter)
             try:
@@ -354,10 +366,17 @@ class IDDASBroker(Broker):
                 with zipfile.ZipFile(io.BytesIO(response.content)) as z:
                     with z.open(z.namelist()[0]) as f:
                         file_content = f.read()
-                    with open(dir.joinpath(file_name_temp), 'wb') as f:
-                        f.write(file_content)
+                    with open(file_name_temp, 'wb') as f:
+                                f.write(file_content)
+            
 
-            return do_processing(xr.open_mfdataset(f"{dir}/*.nc", combine='nested', concat_dim='N_LEVELS', parallel=True))
+            ds = []
+            for file in dir.iterdir():
+                ds.append(do_processing(xr.open_dataset(file)))
+                
+            ds = [x for x in ds if x is not None]
+
+            return ds
 
     def execute(self, urn: QueryName, params: dict|None = None) -> Result:
         query = IDDASBroker._queries[urn]

@@ -27,7 +27,7 @@ This implementation provides two data brokers:
 `LocalBroker` supports the three named queries, while `WikidataBroker` only
 supports the first two.
 
-# FAIRE-EASE UDAL Implementation Argo
+# FAIR-EASE UDAL Implementation Argo
 
 This implementation supports one named query:
 
