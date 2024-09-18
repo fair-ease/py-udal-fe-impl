@@ -7,7 +7,7 @@ import requests
 import os
 from dotenv import load_dotenv
 import xarray as xr
-
+import warnings
 
 
 from ..broker import Broker
@@ -16,7 +16,7 @@ from ..result import Result
 from ..config import Config
 
 beaconBrokerQueryName: List[QueryName] = [
-    'urn:fairease.eu:argo'
+    'urn:fairease.eu:argo:data'
 ]
 
 beaconBrokerQueries: dict[QueryName, NamedQueryInfo] = \
@@ -43,7 +43,7 @@ class BeaconBroker(Broker):
         
         self._config = config
         if not self._config or not self._config.beacon_token:
-            raise ValueError('Please provide a token')
+            raise Exception('Please provide a token')
         self.token = self._config.beacon_token
 
     def _execute_argo(self, params: dict):
@@ -95,11 +95,26 @@ class BeaconBroker(Broker):
 
         # bounding box
         if 'bounding_box' in params:
-            raise NotImplementedError('Bounding box is not implemented')
+            params.pop('bounding_box')
+            warnings.warn('Bounding box is not implemented')
 
         # Create filename
         params_str = "_".join(f"[{','.join(map(str, params[key])) if isinstance(params[key], list) else params[key]}]" for key in params.keys())
         file_name = f"beacon_argo_{params_str}.nc"
+
+        def request_data(json_params, file_name):
+            print('Requesting data from the Argo Beacon API...')
+            response = requests.post(
+                'https://beacon-argo.maris.nl/api/query',
+                json=json_params,
+                headers={'Authorization': f'Bearer {self.token}', 'Content-Type': 'application/json'},
+                stream=True
+            )
+            response.raise_for_status()
+            with open(dir.joinpath(file_name), 'wb') as file:
+                for chunk in response.iter_content(chunk_size=1024):
+                    file.write(chunk)
+
 
         if self._config.cache_dir is None:
             with tempfile.TemporaryDirectory(prefix='fairease-udal-') as temp_dir:
@@ -110,18 +125,10 @@ class BeaconBroker(Broker):
                     pass
 
                 try:
-                    response = requests.post(
-                        'https://beacon-argo.maris.nl/api/query',
-                        json=json_params,
-                        headers={'Authorization': f'Bearer {self.token}', 'Content-Type': 'application/json'},
-                        stream=True
-                    )
-                    response.raise_for_status()
 
-                    with open(dir.joinpath(file_name), 'wb') as file:
-                        for chunk in response.iter_content(chunk_size=1024):
-                            file.write(chunk)
-
+                    if not dir.joinpath(file_name).exists():
+                        request_data(json_params, file_name)
+                        
                     data = xr.open_dataset(dir.joinpath(file_name), engine='netcdf4')
                     data.close()
 
@@ -139,17 +146,9 @@ class BeaconBroker(Broker):
                 pass
 
             try:
-                response = requests.post(
-                    'https://beacon-argo.maris.nl/api/query',
-                    json=json_params,
-                    headers={'Authorization': f'Bearer {self.token}', 'Content-Type': 'application/json'},
-                    stream=True
-                )
-                response.raise_for_status()
-
-                with open(dir.joinpath(file_name), 'wb') as file:
-                    for chunk in response.iter_content(chunk_size=1024):
-                        file.write(chunk)
+                
+                if not dir.joinpath(file_name).exists():
+                    request_data(json_params, file_name)
                 
                 if dir.joinpath(file_name).stat().st_size == 0:
                     raise Exception('No data found for the given parameters')
@@ -168,7 +167,7 @@ class BeaconBroker(Broker):
         query = BeaconBroker._queries[urn]
         queryParams = params or {}
 
-        if urn == 'urn:fairease.eu:argo':
+        if urn == 'urn:fairease.eu:argo:data':
             return Result(query, self._execute_argo(queryParams))
         else:
             if urn in QUERY_NAMES:

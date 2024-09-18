@@ -72,7 +72,7 @@ QueryName = Literal[
     'urn:fairease.eu:udal:example:weekdays',
     'urn:fairease.eu:udal:example:months',
     'urn:fairease.eu:udal:example:translation',
-    'urn:fairease.eu:argo'
+    'urn:fairease.eu:argo:data'
     ]
 
 
@@ -100,8 +100,8 @@ QUERY_REGISTRY : dict[QueryName, NamedQueryInfo] = {
             [],
             [],
         ),
-    'urn:fairease.eu:argo': NamedQueryInfo(
-            'urn:fairease.eu:argo',
+    'urn:fairease.eu:argo:data': NamedQueryInfo(
+            'urn:fairease.eu:argo:data',
             [
                 TypedValue('parameter', 'str|List[str]'),
                 TypedValue('startTime', 'str'),

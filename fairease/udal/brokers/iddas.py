@@ -22,7 +22,7 @@ from ..namedqueries import NamedQueryInfo, QueryName, QUERY_NAMES, QUERY_REGISTR
 from ..result import Result
 
 iddasBrokerQueryName: List[QueryName] = [
-    'urn:fairease.eu:argo',
+    'urn:fairease.eu:argo:data',
 ]
 
 iddasBrokerQueries: dict[QueryName, NamedQueryInfo] = \
@@ -278,11 +278,37 @@ class IDDASBroker(Broker):
         sparql.setQuery(query)
         sparql.setReturnFormat(JSON)
         results = sparql.query().convert()
+                
+        def download_and_process_files(dir: Path, file_name: str, list_distribution: List[str], results: dict):
+            list_distribution = self._get_list_distribution(results)
+
+            download_urls = []
             
-        def do_processing(dataset: xr.Dataset):
-            try: 
+            if list_distribution:
+                try:
+                    list_order_id = [self._create_order(distribution).get("order").get("id") for distribution in list_distribution]
+                    download_urls = self._wait_and_download_orders(list_order_id)
+                except ApiException as e:
+                    raise Exception(f'Error: {e}')
+
+            for i, download_url in enumerate(download_urls):
+                list_plataform_cycle = [
+                    f"platform-{self._extract_query_param(dist, 'platform')}_cycle-{self._extract_query_param(dist, 'cycle')}"
+                    for dist in list_distribution
+                ]
+                file_name_temp = f"{file_name.split('.nc')[0]}_{list_plataform_cycle[i]}.nc"
+                response = requests.get(download_url)
+                with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+                    with z.open(z.namelist()[0]) as f:
+                        file_content = f.read()
+                    with open(dir.joinpath(file_name_temp), 'wb') as f:
+                        f.write(file_content)
+
+        def do_processing(dataset: xr.Dataset, params: dict):
+            """Effectue le traitement des données extraites du dataset."""
+            try:
                 list_data_vars = ['JULD', 'LATITUDE', 'LONGITUDE']
-            
+
                 parameter = params['parameter']
                 if isinstance(parameter, str):
                     list_data_vars.append(self.dict_params[parameter])
@@ -299,90 +325,49 @@ class IDDASBroker(Broker):
             except Exception as e:
                 raise Exception(f'Error: {e}')
 
+        def process_and_return_datasets(dir: Path, params: dict):
+            """Ouvre les fichiers dans le répertoire donné et applique do_processing pour les traiter."""
+            ds = []
+            for file in dir.iterdir():
+                dataset = do_processing(xr.open_dataset(file), params)
+                if dataset is not None:
+                    ds.append(dataset)
+    
+            return ds
         if self._config.cache_dir is None:
             with tempfile.TemporaryDirectory(prefix='fairease-udal-') as temp_dir:
                 dir = Path(temp_dir).joinpath(folder_name_filter)
                 try:
                     os.mkdir(dir)
-                except:
-                    pass	
+                except FileExistsError:
+                    pass
 
                 list_distribution = self._get_list_distribution(results)
 
-                download_urls = []
-
-                if list_distribution:
-                    try :
-                        list_order_id = [self._create_order(distribution).get("order").get("id") for distribution in list_distribution]
-                        download_urls = self._wait_and_download_orders(list_order_id)
-                    except ApiException as e:
-                        raise Exception(f'Error: {e}')
-                for i, download_url in enumerate(download_urls):
-
-                    list_plataform_cycle = [
-                        f"platform-{self._extract_query_param(dist, 'platform')}_cycle-{self._extract_query_param(dist, 'cycle')}"
-                        for dist in list_distribution
-                    ]
-                    file_name_temp = f"{file_name.split('.nc')[0]}_{list_plataform_cycle[i]}.nc"
-                    response = requests.get(download_url)
-                    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-                        with z.open(z.namelist()[0]) as f:
-                            file_content = f.read()
-                        with open(dir.joinpath(file_name_temp), 'wb') as f:
-                            f.write(file_content)
-
-
-                ds = []
-                for file in dir.iterdir():
-                    ds.append(do_processing(xr.open_dataset(file)))
-                    
-                ds = [x for x in ds if x is not None]
-
-                return ds
-
+                download_and_process_files(dir, file_name, list_distribution, results)
+                return process_and_return_datasets(dir, params)
 
         else:
             dir = Path(self._config.cache_dir).joinpath(folder_name_filter)
             try:
                 os.mkdir(dir)
-            except:
+            except FileExistsError:
                 pass
 
             list_distribution = self._get_list_distribution(results)
             list_plataform_cycle, list_files = self._prepare_file_names(dir.joinpath(file_name), list_distribution)
             list_distribution = self._remove_existing_files(list_files, list_distribution)
-            download_urls = []
 
             if list_distribution:
-                try :
-                    list_order_id = [self._create_order(distribution).get("order").get("id") for distribution in list_distribution]
-                    download_urls = self._wait_and_download_orders(list_order_id)
-                except ApiException as e:
-                    raise Exception(f'Error: {e}')
+                download_and_process_files(dir, file_name, list_distribution, results)
 
-            for i, download_url in enumerate(download_urls):
-                file_name_temp = list_files[i]
-                response = requests.get(download_url)
-                with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-                    with z.open(z.namelist()[0]) as f:
-                        file_content = f.read()
-                    with open(file_name_temp, 'wb') as f:
-                                f.write(file_content)
-            
-
-            ds = []
-            for file in dir.iterdir():
-                ds.append(do_processing(xr.open_dataset(file)))
-                
-            ds = [x for x in ds if x is not None]
-
-            return ds
+            return process_and_return_datasets(dir, params)
 
     def execute(self, urn: QueryName, params: dict|None = None) -> Result:
         query = IDDASBroker._queries[urn]
         queryParams = params or {}
 
-        if urn == 'urn:fairease.eu:argo':
+        if urn == 'urn:fairease.eu:argo:data':
             return Result(query, self._execute_argo(queryParams))
         else:
             if urn in QUERY_NAMES:

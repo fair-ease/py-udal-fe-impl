@@ -31,7 +31,7 @@ supports the first two.
 
 This implementation supports one named query:
 
-- `urn:fairease.eu:argo` &ndash; Data argo
+- `urn:fairease.eu:argo:data` &ndash; Data argo
 
 This implementation provides two date brokers:
 
