@@ -27,13 +27,13 @@ This implementation provides two data brokers:
 `LocalBroker` supports the three named queries, while `WikidataBroker` only
 supports the first two.
 
-# FAIR-EASE UDAL Implementation Argo
+## Argo Data
 
 This implementation supports one named query:
 
 - `urn:fairease.eu:argo:data` &ndash; Data argo
 
-This implementation provides two date brokers:
+This implementation provides two data brokers:
 
-- `IddasBroker` using data from [IDDAS](https://fair-ease-iddas.maris.nl) and [Blue-cloud](https://data.blue-cloud.org/)
-- `BeaconBroken` using data from [Beacon](https://beacon.maris.nl/)
+- `IddasBroker` using data from [IDDAS](https://fair-ease-iddas.maris.nl) and [Blue-cloud](https://data.blue-cloud.org/) (connection string: `https://fair-ease-iddas.maris.nl`)
+- `BeaconBroken` using data from [Beacon](https://beacon.maris.nl/) (connection string: `https://beacon-argo.maris.nl`)
