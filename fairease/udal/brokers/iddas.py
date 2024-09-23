@@ -61,36 +61,6 @@ class IDDASBroker(Broker):
         self.base_url = 'https://data.blue-cloud.org/api'
         self.sparql_url = 'https://fair-ease-iddas.maris.nl/sparql/query'
         self.headers = {'Authorization': f'Bearer {self.token}', 'Content-Type': 'application/json'}
-        
-        self.api_order = swagger_client.OrdersApi(swagger_client.ApiClient(header_name='Authorization', header_value=f'Bearer {self.token}'))
-    
-    def _create_order(self, list_distribution: str) -> dict:
-        """Creates an order for data retrieval based on distribution list."""
-        if self.catalog == 'argo':
-            platform = self._extract_query_param(list_distribution, "platform")
-            cycle = self._extract_query_param(list_distribution, "cycle")
-            query_param = {
-                "query_fields": {
-                    "argo": {
-                        "platform_code": platform,
-                        "cycles_id": cycle
-                    }
-                }
-            }
-        else:
-            raise ValueError("Catalog not supported.")
-        
-        
-        response = self.api_order.order_query_post(body=query_param)
-        
-        return response.to_dict()
-
-    def _download_order(self, order_id: str) -> dict:
-        """Downloads the order data based on the order ID."""
-        time.sleep(1)
-        
-        response = self.api_order.order_order_number_get(order_id)
-        return response.to_dict()
     
     def _extract_query_param(self, query: str, param: str) -> str:
         """Extracts the value of a query parameter from a query string."""
@@ -162,7 +132,7 @@ class IDDASBroker(Broker):
 
         return list_distribution
 
-    def _prepare_file_names(self, file_name: str, list_distribution: List[str]) -> Tuple[List[str], List[str]]:
+    def _prepare_file_names(self, file_name: str, list_distribution: List[str]) -> List[str]:
         """Prepares platform cycle and file names from distributions."""
         file_name = str(file_name)
         if self.catalog == "argo":
@@ -174,7 +144,7 @@ class IDDASBroker(Broker):
                 f"{file_name.split('.nc')[0]}_{plataform_cycle}.nc"
                 for plataform_cycle in list_plataform_cycle
             ]
-            return list_plataform_cycle, list_files
+            return list_files
 
         raise ValueError("Catalog not supported.")
 
@@ -194,23 +164,6 @@ class IDDASBroker(Broker):
                         raise ValueError("Catalog not supported.")
                     
         return list_distribution
-
-    def _wait_and_download_orders(self, list_order_id: List[str]):
-        """Waits for the orders to be ready and downloads them."""
-        i, sleep_time = 1, 30
-        while True:
-            try:
-                results = [self._download_order(order_id) for order_id in list_order_id]
-                break
-            except ApiException as e:
-                if e.status == 500:
-                    raise Exception(f'Error: {e}')
-                time.sleep(sleep_time * i)
-                i += 1
-
-        download_urls = [result.get("download").get("data").get("download_url") for result in results]
-
-        return download_urls
 
     def _create_folder_name(self, params: Dict[str, Union[str, float, int]]) -> str:
         """Creates a folder name based on parameters."""
@@ -234,7 +187,7 @@ class IDDASBroker(Broker):
         PREFIX geof: <http://www.opengis.net/def/function/geosparql/>
         PREFIX geo: <http://www.opengis.net/ont/geosparql#>
         PREFIX schema: <https://schema.org/>
-        SELECT DISTINCT ?distribution ?mediaType WHERE {{
+        SELECT DISTINCT ?distribution ?mediaType ?downloadURL WHERE {{
             ?dataset a dcat:Dataset ;
                 dc:title ?_title ;
                 dc:description ?description .
@@ -264,32 +217,28 @@ class IDDASBroker(Broker):
                 ?catalog a dcat:Catalog ;
                 dcat:dataset ?dataset .
             }}
-            OPTIONAL {{
-                ?dataset dcat:distribution ?distribution .
-            }}
-            OPTIONAL {{
-                ?distribution dcat:mediaType ?mediaType .
-            }}
+
+            ?dataset dcat:distribution ?distribution .
+            ?distribution dcat:downloadURL ?downloadURL .
+            ?distribution dcat:mediaType ?mediaType .
 
             FILTER (BOUND(?catalog) && STRSTARTS(STR(?catalog), 'https://data.blue-cloud.org/search/dcat/argo') ) . 
             {sparql_filter}
-        }} GROUP BY ?dataset ?distribution ?mediaType"""
+        }} GROUP BY ?dataset ?distribution ?mediaType ?downloadURL"""
+        
         sparql = SPARQLWrapper(self.sparql_url)
         sparql.setQuery(query)
         sparql.setReturnFormat(JSON)
         results = sparql.query().convert()
-                
+
         def download_and_process_files(dir: Path, file_name: str, list_distribution: List[str], results: dict):
             list_distribution = self._get_list_distribution(results)
 
             download_urls = []
-            
-            if list_distribution:
-                try:
-                    list_order_id = [self._create_order(distribution).get("order").get("id") for distribution in list_distribution]
-                    download_urls = self._wait_and_download_orders(list_order_id)
-                except ApiException as e:
-                    raise Exception(f'Error: {e}')
+
+            for result in results['results']['bindings']:
+                if result['downloadURL']['value']:
+                    download_urls.append(result['downloadURL']['value'])
 
             for i, download_url in enumerate(download_urls):
                 list_plataform_cycle = [
@@ -297,15 +246,18 @@ class IDDASBroker(Broker):
                     for dist in list_distribution
                 ]
                 file_name_temp = f"{file_name.split('.nc')[0]}_{list_plataform_cycle[i]}.nc"
-                response = requests.get(download_url)
+                
+                header = {'Authorization': f'Bearer {self.token}', 'Content-Type': 'application/zip'}
+                response = requests.get(download_url, headers=header)
                 with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-                    with z.open(z.namelist()[0]) as f:
-                        file_content = f.read()
-                    with open(dir.joinpath(file_name_temp), 'wb') as f:
-                        f.write(file_content)
+                    for file in z.namelist():
+                        if 'prof.nc' in file:
+                            with z.open(file) as f:
+                                file_content = f.read()
+                            with open(dir.joinpath(file_name_temp), 'wb') as f:
+                                f.write(file_content)
 
         def do_processing(dataset: xr.Dataset, params: dict):
-            """Effectue le traitement des données extraites du dataset."""
             try:
                 list_data_vars = ['JULD', 'LATITUDE', 'LONGITUDE']
 
@@ -326,7 +278,6 @@ class IDDASBroker(Broker):
                 raise Exception(f'Error: {e}')
 
         def process_and_return_datasets(dir: Path, params: dict):
-            """Ouvre les fichiers dans le répertoire donné et applique do_processing pour les traiter."""
             ds = []
             for file in dir.iterdir():
                 dataset = do_processing(xr.open_dataset(file), params)
@@ -355,7 +306,7 @@ class IDDASBroker(Broker):
                 pass
 
             list_distribution = self._get_list_distribution(results)
-            list_plataform_cycle, list_files = self._prepare_file_names(dir.joinpath(file_name), list_distribution)
+            list_files = self._prepare_file_names(dir.joinpath(file_name), list_distribution)
             list_distribution = self._remove_existing_files(list_files, list_distribution)
 
             if list_distribution:
