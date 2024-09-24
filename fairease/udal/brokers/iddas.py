@@ -251,13 +251,12 @@ class IDDASBroker(Broker):
                 response = requests.get(download_url, headers=header)
                 with zipfile.ZipFile(io.BytesIO(response.content)) as z:
                     for file in z.namelist():
-                        if 'prof.nc' in file:
-                            with z.open(file) as f:
-                                file_content = f.read()
-                            with open(dir.joinpath(file_name_temp), 'wb') as f:
-                                f.write(file_content)
+                        if file.endswith('prof.nc'):
+                            z.extract(file, dir)
+                            os.rename(dir.joinpath(file), dir.joinpath(file_name_temp))
 
         def do_processing(dataset: xr.Dataset, params: dict):
+            dataset.close()
             try:
                 list_data_vars = ['JULD', 'LATITUDE', 'LONGITUDE']
 
@@ -270,7 +269,6 @@ class IDDASBroker(Broker):
 
                 dataset = dataset[list_data_vars]
 
-                dataset.close()
                 return dataset
             except KeyError:
                 return None
