@@ -3,6 +3,31 @@
 See the Uniform Data Access Layer (UDAL) specification at
 https://github.com/fair-ease/py-udal-interface
 
+
+## Development Setup
+
+Clone this repository and
+[py-udal-interface](https://github.com/fair-ease/py-udal-interface) into the
+same workspace/directory, with a directory structure like:
+
+```
+.
+├── py-udal-fe-impl
+└── py-udal-interface
+```
+
+To install the dependencies into a virtual environment shared by these two packages, run:
+
+```sh
+python -m venv .venv
+source .venv/bin/activate
+cd py-udal-fe-impl
+pip install -r requirements.txt
+```
+
+
+## Simple Examples
+
 Try the examples with:
 
 ```sh
@@ -26,6 +51,7 @@ This implementation provides two data brokers:
 
 `LocalBroker` supports the three named queries, while `WikidataBroker` only
 supports the first two.
+
 
 ## Argo Data
 

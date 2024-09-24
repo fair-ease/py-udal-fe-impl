@@ -1,19 +1,12 @@
 import io
 from pathlib import Path
 import zipfile
-from SPARQLWrapper import SPARQLWrapper, JSON 
-import numpy as np
+from SPARQLWrapper import SPARQLWrapper, JSON
 import requests
-from requests.exceptions import RequestException
 import os
 import xarray as xr
-import time
-import json
-from typing import List, Dict, Tuple, Union
+from typing import List, Dict, Union
 import tempfile
-
-import swagger_client
-from swagger_client.rest import ApiException
 
 from ..config import Config
 

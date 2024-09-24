@@ -18,9 +18,9 @@ class UDAL(udal.UDAL):
     def __init__(self, connectionString: Connection | None = None, config: Config | None = None):
         self._config = config or Config()
         if connectionString is None:
-            self._broker = LocalBroker(self._config)
+            self._broker = LocalBroker()
         elif connectionString == 'https://www.wikidata.org/':
-            self._broker = WikidataBroker(self._config)
+            self._broker = WikidataBroker()
         elif connectionString == 'https://beacon-argo.maris.nl':
             self._broker = BeaconBroker(self._config)
         elif connectionString == 'https://fair-ease-iddas.maris.nl':

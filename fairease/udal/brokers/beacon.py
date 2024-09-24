@@ -1,11 +1,9 @@
 import datetime
-import json
 from pathlib import Path
 import tempfile
 from typing import List
 import requests
 import os
-from dotenv import load_dotenv
 import xarray as xr
 import warnings
 

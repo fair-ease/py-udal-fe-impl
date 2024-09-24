@@ -1,0 +1,7 @@
+ipykernel
+requests
+pandas
+SPARQLWrapper
+xarray[complete]
+-e ../py-udal-interface
+-e .
