@@ -90,7 +90,18 @@ class IDDASBroker(Broker):
         if 'endTime' in params:
             sparql_filter.append(f"FILTER(BOUND(?endDate) && ?endDate <= '{params['endTime']}'^^xsd:date) .")
         if 'latitude' in params and 'longitude' in params:
-            sparql_filter.append(f"FILTER(BOUND(?bbox) && ?bbox = 'POINT ({params['latitude']} {params['longitude']})'^^geo:wktLiteral) .")
+            min_latitude = params['latitude'] - 10
+            max_latitude = params['latitude'] + 10
+            min_longitude = params['longitude'] - 10
+            max_longitude = params['longitude'] + 10
+
+            bbox_wkt = f"POLYGON(({min_longitude} {min_latitude}, {min_longitude} {max_latitude}, {max_longitude} {max_latitude}, {max_longitude} {min_latitude}, {min_longitude} {min_latitude}))"
+
+            sparql_filter.append(f"""
+                FILTER(BOUND(?bbox) && geof:sfWithin(?bbox, '{bbox_wkt}'^^geo:wktLiteral))
+            """)
+
+
         elif 'latitude' in params or 'longitude' in params:
             raise ValueError("Both latitude and longitude must be provided.")
         if 'bounding_box' in params:
@@ -98,10 +109,14 @@ class IDDASBroker(Broker):
                 raise ValueError("Bounding box must be a dictionary with keys 'north', 'east', 'south', 'west'.")
             if not all(k in params['bounding_box'] for k in ['north', 'east', 'south', 'west']):
                 raise ValueError("Bounding box must be a dictionary with keys 'north', 'east', 'south', 'west'.")
+            north = params['bounding_box'].get('north')
+            east = params['bounding_box'].get('east')
+            south = params['bounding_box'].get('south')
+            west = params['bounding_box'].get('west')
             sparql_filter.append(
-                f"FILTER(BOUND(?bbox) && ?bbox = 'POLYGON (({params['bounding_box']['north']} {params['bounding_box']['east']}, "
-                f"{params['bounding_box']['north']} {params['bounding_box']['west']}, {params['bounding_box']['south']} {params['bounding_box']['west']}, "
-                f"{params['bounding_box']['south']} {params['bounding_box']['east']}, {params['bounding_box']['north']} {params['bounding_box']['east']}))'^^geo:wktLiteral) ."
+                f"FILTER(BOUND(?bbox) && geof:sfWithin(?bbox, 'POLYGON (({north} {east}, "
+                f"{north} {west}, {south} {west}, "
+                f"{south} {east}, {north} {east}))'^^geo:wktLiteral)) ."
             )
 
         return " ".join(sparql_filter)
@@ -160,10 +175,22 @@ class IDDASBroker(Broker):
 
     def _create_folder_name(self, params: Dict[str, Union[str, float, int]]) -> str:
         """Creates a folder name based on parameters."""
-        folder_name_filter = "_".join(
-            f"{','.join(map(str, params[key])) if isinstance(params[key], list) else params[key]}"
-            for key in sorted(params.keys())
-        )
+        folder_name_filter = ""
+        if 'parameter' in params:
+            parameter = params['parameter']
+            if isinstance(parameter, list):
+                folder_name_filter += "_".join(parameter)
+            else:
+                folder_name_filter += str(parameter)
+        if 'startTime' in params:
+            folder_name_filter += f"_{params['startTime']}"
+        if 'endTime' in params:
+            folder_name_filter += f"_{params['endTime']}"
+        if 'latitude' in params and 'longitude' in params:
+            folder_name_filter += f"_{params['latitude']}_{params['longitude']}"
+        if 'bounding_box' in params:
+            folder_name_filter += f"_{params['bounding_box']['north']}_{params['bounding_box']['east']}_{params['bounding_box']['south']}_{params['bounding_box']['west']}"
+
         return folder_name_filter.replace(" ", "_").replace(":", "_").replace("-", "_").replace(",", "_")
 
     def _execute_argo(self, params: dict):

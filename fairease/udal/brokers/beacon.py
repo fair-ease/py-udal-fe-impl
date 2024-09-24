@@ -87,9 +87,13 @@ class BeaconBroker(Broker):
 
         # Latitude and longitude
         if 'latitude' in params:
-            json_params['filters'].append({"for_query_parameter": "Latitude", "min": params['latitude'], "max": params['latitude']})
+            min = params['latitude'] - 0.5
+            max = params['latitude'] + 0.5
+            json_params['filters'].append({"for_query_parameter": "Latitude", "min": min, "max": max})
         if 'longitude' in params:
-            json_params['filters'].append({"for_query_parameter": "Longitude", "min": params['longitude'], "max": params['longitude']})
+            min = params['longitude'] - 0.5
+            max = params['longitude'] + 0.5
+            json_params['filters'].append({"for_query_parameter": "Longitude", "min": min, "max": max})
 
         # bounding box
         if 'bounding_box' in params:
@@ -101,7 +105,6 @@ class BeaconBroker(Broker):
         file_name = f"beacon_argo_{params_str}.nc"
 
         def request_data(json_params, file_name):
-            print('Requesting data from the Argo Beacon API...')
             response = requests.post(
                 'https://beacon-argo.maris.nl/api/query',
                 json=json_params,
