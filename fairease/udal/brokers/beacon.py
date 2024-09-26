@@ -86,6 +86,8 @@ class BeaconBroker(Broker):
             json_params['filters'].append({"for_query_parameter": "TIME", "min": min_temporal, "max": max_temporal})
 
         # Latitude and longitude
+        # Use a range of 0.5 degrees
+        # Otherwise Beacon would search for the exact point
         if 'latitude' in params:
             min = params['latitude'] - 0.5
             max = params['latitude'] + 0.5

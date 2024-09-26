@@ -90,6 +90,8 @@ class IDDASBroker(Broker):
         if 'endTime' in params:
             sparql_filter.append(f"FILTER(BOUND(?endDate) && ?endDate <= '{params['endTime']}'^^xsd:date) .")
         if 'latitude' in params and 'longitude' in params:
+            # Use a bounding box of 10 degrees around the provided latitude and longitude
+            # Otherwise SPARQL would search for the exact point
             min_latitude = params['latitude'] - 10
             max_latitude = params['latitude'] + 10
             min_longitude = params['longitude'] - 10
@@ -271,7 +273,7 @@ class IDDASBroker(Broker):
                 response = requests.get(download_url, headers=header)
                 with zipfile.ZipFile(io.BytesIO(response.content)) as z:
                     for file in z.namelist():
-                        if file.endswith('prof.nc'):
+                        if file.endswith('_prof.nc'):
                             z.extract(file, dir)
                             os.rename(dir.joinpath(file), dir.joinpath(file_name_temp))
 
