@@ -2,6 +2,8 @@ ipykernel
 requests
 pandas
 SPARQLWrapper
+intake
+intake-stac
 xarray[complete]
 -e ../py-udal-interface
 -e .

@@ -7,6 +7,7 @@ import os
 import xarray as xr
 from typing import List, Dict, Union
 import tempfile
+import intake
 
 from ..config import Config
 
@@ -333,6 +334,110 @@ class IDDASBroker(Broker):
                 download_and_process_files(dir, file_name, list_distribution, results)
 
             return process_and_return_datasets(dir, params)
+
+    def _execute_openeo(self, params: dict):
+        """Executes the openeo data retrieval process."""
+        self.catalog = "openeo"
+        sparql_filter = self._build_sparql_filter(params)
+        query = f"""
+        PREFIX dcat: <http://www.w3.org/ns/dcat#>
+        PREFIX dc: <http://purl.org/dc/terms/>
+        PREFIX prov: <http://www.w3.org/ns/prov#>
+        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+        PREFIX geof: <http://www.opengis.net/def/function/geosparql/>
+        PREFIX geo: <http://www.opengis.net/ont/geosparql#>
+        PREFIX schema: <https://schema.org/>
+        SELECT DISTINCT ?distribution ?accessURL WHERE {{
+            ?dataset a dcat:Dataset ;
+                dc:title ?_title ;
+                dc:description ?description .
+            OPTIONAL {{
+                ?dataset dc:temporal [
+                    a dc:PeriodOfTime ;
+                    dcat:startDate ?startDate ;
+                    dcat:endDate ?endDate
+                ] .
+            }}
+            OPTIONAL {{
+                ?dataset dc:spatial [
+                    a dc:Location ;
+                    dcat:bbox ?bbox
+                ] .
+            }}
+            OPTIONAL {{
+                ?dataset schema:variableMeasured [
+                    a schema:PropertyValue ;
+                    schema:name ?parameterName
+                ] .
+            }}
+            OPTIONAL {{
+                ?dataset prov:used ?used .
+            }}
+            OPTIONAL {{
+                ?catalog a dcat:Catalog ;
+                dcat:dataset ?dataset .
+            }}
+            OPTIONAL {{
+                ?dataset dcat:distribution ?distribution .
+            }}
+            OPTIONAL {{
+  	            ?distribution dcat:accessURL ?accessURL .
+            }}
+
+            
+            FILTER (BOUND(?catalog) && STRSTARTS(STR(?catalog), 'https://dataset.geodab.eu/source/marineID') ) . 
+            FILTER(BOUND(?accessURL) && STRENDS(STR(?accessURL), 'stac.json') ) .
+            {sparql_filter}
+        }} GROUP BY ?dataset ?distribution ?accessURL LIMIT 10"""
+        sparql = SPARQLWrapper(self.sparql_url)
+        sparql.setQuery(query)
+        sparql.setReturnFormat(JSON)
+        results = sparql.query().convert()
+        if (not results or not results['results'] or not results['results']['bindings']):
+            raise Exception('No data has been found for your query, please update your input fields and try again.')
+        
+        accessURLs = [result['accessURL']['value'] for result in results['results']['bindings']]
+        
+        catalogs = []
+
+        for accessURL in accessURLs:
+            response = requests.get(accessURL)
+
+            if response.status_code != 200:
+                print(f"Error: {response.status_code} - {accessURL}")
+                continue 
+
+            stac_obj = self.open_stac_object(response.json())  
+            if isinstance(stac_obj, pystac.Collection):
+                for item in stac_obj.get_all_items():
+                    ds = intake.open_stac_item(item)
+                    catalogs.append(ds)
+            elif isinstance(stac_obj, pystac.Item):
+                ds = intake.open_stac_item(stac_obj)
+                catalogs.append(ds)
+            else:
+                raise ValueError(f"Unsupported STAC object type: {type(stac_obj)}")
+
+        
+        datasets= []
+
+        for catalog in catalogs:
+            for name in catalog:
+                try:
+                    ds = catalog[name].to_dask()
+                    datasets.append(ds)
+                except Exception as e:
+                    pass
+
+        ds_xarray = []
+        for ds in datasets:
+            if type(ds) == str:
+                print(f"Error: {ds}")
+                continue
+            ds_xarray.append(ds)
+
+        return ds_xarray
+    
 
     def execute(self, urn: QueryName, params: dict|None = None) -> Result:
         query = IDDASBroker._queries[urn]
