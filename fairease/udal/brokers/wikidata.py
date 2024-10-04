@@ -61,7 +61,7 @@ class WikidataBroker(Broker):
                 # instance of day of week
                 ?dayOfWeek wdt:P31 wd:Q41825.
                 # sub class of day
-                ?dayOfWeek wdt:P279 wd:Q573.
+                #?dayOfWeek wdt:P279 wd:Q573.
                 # day of week ordinal
                 ?dayOfWeek p:P1545 ?x.
                 ?x ps:P1545 ?dayOfWeekOrdinal.
@@ -71,6 +71,7 @@ class WikidataBroker(Broker):
                 # language filter (if any)
                 """ + sparqlFilter + """
             }
+            ORDER BY ?dayOfWeekLang ?dayOfWeekOrdinal
         """
         sparql = SPARQLWrapper(WikidataBroker._WIKIDATA_SPARQL_ENDPOINT)
         sparql.setQuery(q)
