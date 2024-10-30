@@ -32,8 +32,8 @@ class LocalBroker(Broker):
         return list(LocalBroker._query_names)
 
     @property
-    def queries(self) -> List[NamedQueryInfo]:
-        return list(LocalBroker._queries.values())
+    def queries(self):
+        return { k: v for k, v in LocalBroker._queries.items() }
 
     @staticmethod
     def _testDataSetPath(filename: str):
@@ -81,18 +81,18 @@ class LocalBroker(Broker):
         # return all translations
         return pd.concat([weekdays, months]).reset_index().drop(columns='index')
 
-    def execute(self, urn: QueryName, params: dict | None = None) -> Result:
-        query = LocalBroker._queries[urn]
+    def execute(self, name: QueryName, params: dict | None = None) -> Result:
+        query = LocalBroker._queries[name]
         queryParams = params or {}
-        if urn == 'urn:fairease.eu:udal:example:weekdays':
+        if name == 'urn:fairease.eu:udal:example:weekdays':
             return Result(query, self._execute_weekdays(queryParams))
-        elif urn == 'urn:fairease.eu:udal:example:months':
+        elif name == 'urn:fairease.eu:udal:example:months':
             return Result(query, self._execute_months(queryParams))
-        elif urn == 'urn:fairease.eu:udal:example:translation':
+        elif name == 'urn:fairease.eu:udal:example:translation':
             return Result(query, self._execute_translation())
         else:
-            if urn in QUERY_NAMES:
-                raise Exception(f'unsupported query name "{urn}"')
+            if name in QUERY_NAMES:
+                raise Exception(f'unsupported query name "{name}"')
             else:
-                raise Exception(f'unknown query name "{urn}"')
+                raise Exception(f'unknown query name "{name}"')
 

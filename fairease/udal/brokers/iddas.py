@@ -1,18 +1,19 @@
 import io
+from numbers import Number
 from pathlib import Path
 import zipfile
 from SPARQLWrapper import SPARQLWrapper, JSON
 import requests
 import os
 import xarray as xr
-from typing import List, Dict, Union
+from typing import Any, List, Dict, Union
 import tempfile
 import intake
 
-from ..config import Config
+from udal.specification import Config, NamedQueryInfo
 
 from ..broker import Broker
-from ..namedqueries import NamedQueryInfo, QueryName, QUERY_NAMES, QUERY_REGISTRY
+from ..namedqueries import QueryName, QUERY_NAMES, QUERY_REGISTRY
 from ..result import Result
 
 iddasBrokerQueryName: List[QueryName] = [
@@ -29,7 +30,6 @@ class IDDASBroker(Broker):
     
     _config: Config
 
-
     _queries: dict[QueryName, NamedQueryInfo] = iddasBrokerQueries
 
     @property
@@ -37,8 +37,8 @@ class IDDASBroker(Broker):
         return list(IDDASBroker._queryNames)
 
     @property
-    def queries(self) -> List[NamedQueryInfo]:
-        return list(IDDASBroker._queries.values())
+    def queries(self):
+        return { k: v for k, v in IDDASBroker._queries.items() }
 
     def __init__(self, config: Config):
         self.dict_params = {
@@ -47,9 +47,9 @@ class IDDASBroker(Broker):
                 'pressure': 'PRES'
             }
         self._config = config
-        if not self._config or not self._config.blue_cloud_token:
+        if not self._config or not self._config.api_tokens['blue_cloud']:
             raise ValueError('Please provide a token')
-        self.token = self._config.blue_cloud_token
+        self.token = self._config.api_tokens['blue_cloud']
 
         self.catalog = None
         self.base_url = 'https://data.blue-cloud.org/api'
@@ -90,7 +90,9 @@ class IDDASBroker(Broker):
             sparql_filter.append(f"FILTER(BOUND(?startDate) && ?startDate >= '{params['startTime']}'^^xsd:date) .")
         if 'endTime' in params:
             sparql_filter.append(f"FILTER(BOUND(?endDate) && ?endDate <= '{params['endTime']}'^^xsd:date) .")
-        if 'latitude' in params and 'longitude' in params:
+        if 'latitude' in params and isinstance(params['latitude'], Number) and not isinstance(params['latitude'], str) \
+            and 'longitude' in params and isinstance(params['longitude'], Number) and not isinstance(params['longitude'], str) \
+        :
             # Use a bounding box of 10 degrees around the provided latitude and longitude
             # Otherwise SPARQL would search for the exact point
             min_latitude = params['latitude'] - 10
@@ -145,7 +147,6 @@ class IDDASBroker(Broker):
 
     def _prepare_file_names(self, file_name: str, list_distribution: List[str]) -> List[str]:
         """Prepares platform cycle and file names from distributions."""
-        file_name = str(file_name)
         if self.catalog == "argo":
             list_plataform_cycle = [
                 f"platform-{self._extract_query_param(dist, 'platform')}_cycle-{self._extract_query_param(dist, 'cycle')}"
@@ -176,7 +177,7 @@ class IDDASBroker(Broker):
                     
         return list_distribution
 
-    def _create_folder_name(self, params: Dict[str, Union[str, float, int]]) -> str:
+    def _create_folder_name(self, params: Dict[str, Any]) -> str:
         """Creates a folder name based on parameters."""
         folder_name_filter = ""
         if 'parameter' in params:
@@ -252,7 +253,7 @@ class IDDASBroker(Broker):
         sparql = SPARQLWrapper(self.sparql_url)
         sparql.setQuery(query)
         sparql.setReturnFormat(JSON)
-        results = sparql.query().convert()
+        results: dict[Any, Any] = sparql.query().convert() # type: ignore
 
         def download_and_process_files(dir: Path, file_name: str, list_distribution: List[str], results: dict):
             list_distribution = self._get_list_distribution(results)
@@ -327,7 +328,7 @@ class IDDASBroker(Broker):
                 pass
 
             list_distribution = self._get_list_distribution(results)
-            list_files = self._prepare_file_names(dir.joinpath(file_name), list_distribution)
+            list_files = self._prepare_file_names(str(dir.joinpath(file_name)), list_distribution)
             list_distribution = self._remove_existing_files(list_files, list_distribution)
 
             if list_distribution:
@@ -439,16 +440,16 @@ class IDDASBroker(Broker):
         return ds_xarray
     
 
-    def execute(self, urn: QueryName, params: dict|None = None) -> Result:
-        query = IDDASBroker._queries[urn]
+    def execute(self, name: QueryName, params: dict|None = None) -> Result:
+        query = IDDASBroker._queries[name]
         queryParams = params or {}
 
-        if urn == 'urn:fairease.eu:argo:data':
+        if name == 'urn:fairease.eu:argo:data':
             return Result(query, self._execute_argo(queryParams))
         else:
-            if urn in QUERY_NAMES:
-                raise Exception(f'unsupported query name "{urn}"')
+            if name in QUERY_NAMES:
+                raise Exception(f'unsupported query name "{name}"')
             else :
-                raise Exception(f'unknown query name "{urn}"')
+                raise Exception(f'unknown query name "{name}"')
 
     

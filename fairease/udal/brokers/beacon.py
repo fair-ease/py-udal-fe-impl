@@ -7,11 +7,11 @@ import os
 import xarray as xr
 import warnings
 
+from udal.specification import Config, NamedQueryInfo
 
 from ..broker import Broker
-from ..namedqueries import NamedQueryInfo, QueryName, QUERY_NAMES, QUERY_REGISTRY
+from ..namedqueries import QueryName, QUERY_NAMES, QUERY_REGISTRY
 from ..result import Result
-from ..config import Config
 
 beaconBrokerQueryName: List[QueryName] = [
     'urn:fairease.eu:argo:data'
@@ -34,15 +34,15 @@ class BeaconBroker(Broker):
         return list(BeaconBroker._queryNames)
 
     @property
-    def queries(self) -> List[NamedQueryInfo]:
-        return list(BeaconBroker._queries.values())
+    def queries(self):
+        return { k: v for k, v in BeaconBroker._queries.items() }
 
     def __init__(self, config: Config):
         
         self._config = config
-        if not self._config or not self._config.beacon_token:
+        if not self._config or not self._config.api_tokens['beacon']:
             raise Exception('Please provide a token')
-        self.token = self._config.beacon_token
+        self.token = self._config.api_tokens['beacon']
 
     def _execute_argo(self, params: dict):
         json_params = {
@@ -166,14 +166,14 @@ class BeaconBroker(Broker):
             except Exception as e:
                 raise Exception(f'Error: {e}')
 
-    def execute(self, urn: QueryName, params: dict|None = None)-> Result: 
-        query = BeaconBroker._queries[urn]
+    def execute(self, name: QueryName, params: dict|None = None)-> Result: 
+        query = BeaconBroker._queries[name]
         queryParams = params or {}
 
-        if urn == 'urn:fairease.eu:argo:data':
+        if name == 'urn:fairease.eu:argo:data':
             return Result(query, self._execute_argo(queryParams))
         else:
-            if urn in QUERY_NAMES:
-                raise Exception(f'unsupported query name "{urn}"')
+            if name in QUERY_NAMES:
+                raise Exception(f'unsupported query name "{name}"')
             else :
-                raise Exception(f'unknown query name "{urn}"')
+                raise Exception(f'unknown query name "{name}"')

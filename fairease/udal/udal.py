@@ -6,17 +6,16 @@ from .brokers.local import LocalBroker
 from .brokers.wikidata import WikidataBroker
 from .brokers.beacon import BeaconBroker
 from .brokers.iddas import IDDASBroker
-from .namedqueries import QueryName
+from .namedqueries import QUERY_NAMES, QueryName
 from .result import Result
-from .config import Config
 
 Connection = Literal['https://www.wikidata.org/', 'https://beacon-argo.maris.nl', 'https://fair-ease-iddas.maris.nl']
 
 class UDAL(udal.UDAL):
     """Uniform Data Access Layer"""
 
-    def __init__(self, connectionString: Connection | None = None, config: Config | None = None):
-        self._config = config or Config()
+    def __init__(self, connectionString: Connection | None = None, config: udal.Config = udal.Config()):
+        self._config = config
         if connectionString is None:
             self._broker = LocalBroker()
         elif connectionString == 'https://www.wikidata.org/':
@@ -25,13 +24,13 @@ class UDAL(udal.UDAL):
             self._broker = BeaconBroker(self._config)
         elif connectionString == 'https://fair-ease-iddas.maris.nl':
             self._broker = IDDASBroker(self._config)
-    def execute(self, urn: QueryName, params: dict|None = None) -> Result:
-        return self._broker.execute(urn, params)
+
+    def execute(self, name: str, params: dict|None = None) -> Result:
+        if name in QUERY_NAMES:
+            return self._broker.execute(name, params)
+        else:
+            raise Exception(f'query {name} not supported')
 
     @property
-    def query_names(self):
-        return self._broker.queryNames
-
-    @property
-    def queries(self):
+    def queries(self) -> dict[str, udal.NamedQueryInfo]:
         return self._broker.queries

@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "py-udal-fe-impl"
+version = "0.1.0"
+description = "FAIR-EASE UDAL implementation."
+authors = [
+    "Jorge Mendes <jorge.mendes@vliz.be>",
+    "Pierre-Louis BOUTRUCHE",
+]
+license = "MIT"
+readme = "README.md"
+packages = [
+    {include = "fairease"},
+]
+include = [
+    {path = "test/data"},
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+py-udal-interface = {git = "https://github.com/fair-ease/py-udal-interface.git"}
+intake = "^2.0.7"
+intake-stac = "^0.4.0"
+pandas = "^2.2.2"
+requests = "^2.32.3"
+sparqlwrapper = "^2.0.0"
+xarray = {extras = ["complete"], version = "^2024.10.0"}
+
+[tool.poetry.group.notebook]
+optional = true
+
+[tool.poetry.group.notebook.dependencies]
+ipykernel = "^6.29.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

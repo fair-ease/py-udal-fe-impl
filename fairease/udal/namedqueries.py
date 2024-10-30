@@ -1,71 +1,8 @@
 import typing
 from typing import List, Literal
 
-
-class NamedValue():
-    """A field with a name in a parameter list or a result column."""
-
-    def __init__(self, name: str):
-        self._name = name
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    def as_dict(self) -> dict:
-        return {
-            'name': self._name,
-        }
-
-
-class TypedValue(NamedValue):
-    """A named field and a description of its type."""
-
-    def __init__(self, name: str, type: str):
-        super().__init__(name)
-        self._type = type
-
-    @property
-    def type(self) -> str:
-        return self._type
-
-    def as_dict(self) -> dict:
-        return {
-            'name': self._name,
-            'type': self._type,
-        }
-
-
-class NamedQueryInfo():
-    """Information about a named query, namely its name, parameters, and
-    fields."""
-
-    def __init__(self,
-            name: str,
-            params: List[NamedValue],
-            fields: List[NamedValue]):
-        self._name = name
-        self._params = params
-        self._fields = fields
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def params(self) -> List[NamedValue]:
-        return self._params
-
-    @property
-    def fields(self) -> List[NamedValue]:
-        return self._fields
-
-    def as_dict(self) -> dict:
-        return {
-            'name': self._name,
-            'params': self._params,
-            'fields': self._fields,
-        }
+from udal.specification import NamedQueryInfo
+import udal.specification as udal
 
 
 QueryName = Literal[
@@ -82,34 +19,30 @@ QUERY_NAMES: typing.Tuple[QueryName, ...] = typing.get_args(QueryName)
 QUERY_REGISTRY : dict[QueryName, NamedQueryInfo] = {
     'urn:fairease.eu:udal:example:weekdays': NamedQueryInfo(
             'urn:fairease.eu:udal:example:weekdays',
-            [
-                TypedValue('lang', 'str|List[str]'),
-                TypedValue('format', '"long"|"short"'),
-            ],
-            [],
+            {
+                'lang': ['str', udal.tlist('str')],
+                'format': [udal.tliteral("long"), udal.tliteral("short")],
+            },
         ),
     'urn:fairease.eu:udal:example:months': NamedQueryInfo(
             'urn:fairease.eu:udal:example:months',
-            [
-                TypedValue('lang', 'str|List[str]'),
-            ],
-            [],
+            {
+                'lang': ['str', udal.tlist('str')],
+            },
         ),
     'urn:fairease.eu:udal:example:translation': NamedQueryInfo(
             'urn:fairease.eu:udal:example:translation',
-            [],
-            [],
+            {},
         ),
     'urn:fairease.eu:argo:data': NamedQueryInfo(
             'urn:fairease.eu:argo:data',
-            [
-                TypedValue('parameter', 'str|List[str]'),
-                TypedValue('startTime', 'str'),
-                TypedValue('endTime', 'str'),
-                TypedValue('bounding_box', 'dict'),
-                TypedValue('longitude', 'float'),
-                TypedValue('latitude', 'float'),
-            ],
-            []
+            {
+                'parameter': ['str', udal.tlist('str')],
+                'startTime': 'str',
+                'endTime': 'str',
+                'bounding_box': udal.tdict('number'),
+                'longitude': 'number',
+                'latitude': 'number',
+            },
         ),
 }
