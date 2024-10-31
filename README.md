@@ -23,6 +23,9 @@ Try the examples with:
 python -m fairease.udal.example
 ```
 
+Examples 5 and 6 request data from Wikidata. Those requests may fail due to
+limits imposed by Wikidata.
+
 This implementation supports three named queries:
 
 - `urn:fairease.eu:udal:example:weekdays` &ndash; days of the week in multiple
